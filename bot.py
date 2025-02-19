@@ -52,6 +52,58 @@ async def workout(ctx, goal: str, type: str, length: str, equipment: str, diffic
     
     await ctx.send(response.choices[0].message.content)
 
+import gspread
+from oauth2client.service_account import ServiceAccountCredentials
+from datetime import datetime
+
+# Google Sheets setup
+scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
+creds = ServiceAccountCredentials.from_json_keyfile_name("google_sheets.json", scope)
+client = gspread.authorize(creds)
+
+# Open the Google Sheet
+SHEET_NAME = "AI Fitness Bot Workouts"
+sheet = client.open(SHEET_NAME).sheet1
+
+@bot.command()
+async def completeworkout(ctx, *, log: str):
+    """Logs completed workouts in Google Sheets."""
+    user = ctx.author.name
+    today = datetime.today().strftime('%Y-%m-%d')
+
+    # Parse the log format (e.g., "Squats ✅, Bench ❌, Rows ✅")
+    exercises = log.split(", ")
+    completed_exercises = []
+    muscle_groups = set()
+
+    for exercise in exercises:
+        parts = exercise.split(" ")
+        status = parts[-1]  # ✅ or ❌
+        exercise_name = " ".join(parts[:-1])
+
+        if status == "✅":
+            completed_exercises.append(exercise_name)
+
+        # Assign muscle groups based on exercise name
+        muscle_group_mapping = {
+            "squat": "Legs & Core",
+            "bench": "Chest & Triceps",
+            "row": "Back & Biceps",
+            "press": "Shoulders",
+            "plank": "Core"
+        }
+        for key, value in muscle_group_mapping.items():
+            if key in exercise_name.lower():
+                muscle_groups.add(value)
+
+    # Convert muscle groups to a string
+    muscle_groups_str = ", ".join(muscle_groups)
+
+    # Log to Google Sheets
+    sheet.append_row([today, user, muscle_groups_str, ", ".join(completed_exercises), "✅"])
+
+    await ctx.send(f"✅ Workout logged! Trained muscle groups: {muscle_groups_str}")
+
 # Run bot
 bot.run(TOKEN)
 
