@@ -58,7 +58,12 @@ from datetime import datetime
 
 # Google Sheets setup
 scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-creds = ServiceAccountCredentials.from_json_keyfile_name("google_sheets.json", scope)
+import os
+import json
+
+# Load Google Sheets credentials from the environment variable
+google_creds = json.loads(os.getenv("GOOGLE_SHEETS_CREDENTIALS"))
+creds = ServiceAccountCredentials.from_json_keyfile_dict(google_creds, scope)
 client = gspread.authorize(creds)
 
 # Open the Google Sheet
