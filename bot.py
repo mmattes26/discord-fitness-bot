@@ -47,14 +47,16 @@ async def workout(ctx, goal: str = "general", muscle_groups: str = None, length:
 
     muscle_history = {}  # Track muscle groups trained on different days
 
-    for workout in recent_workouts:
-        if workout["Muscle Groups"] not in muscle_history:
-            muscle_history[workout["Day"]] = workout["Muscle Groups"]
+# Find user's workout trends
+muscle_history = {}
 
-    # Check if a trend exists for today
-    if today in muscle_history:
-        suggested_muscles = muscle_history[today]
-        await ctx.send(f"📅 You typically train **{suggested_muscles}** on {today}s. Would you like to do that today? (Yes/No)")
+for workout in recent_workouts:
+    if "Day" in workout and "Muscle Groups" in workout:
+        muscle_history[workout["Day"]] = workout["Muscle Groups"]
+
+if today in muscle_history:
+    suggested_muscles = muscle_history[today]
+    await ctx.send(f"📅 You typically train **{suggested_muscles}** on {today}s. Would you like to do that today? (Yes/No)")
         
         def check(m):
             return m.author == ctx.author and m.channel == ctx.channel and m.content.lower() in ["yes", "no"]
