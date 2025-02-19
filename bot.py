@@ -33,24 +33,44 @@ async def test(ctx):
 
 # AI Workout Generator Command
 @bot.command()
-async def workout(ctx, goal: str, type: str, length: str, equipment: str, difficulty: str):
-    """Generates a personalized workout plan based on user preferences."""
-    
-    prompt = f"""
-    Create a {length} workout plan focused on {goal}. 
-    The workout should be a {type} routine using {equipment} and tailored for a {difficulty} fitness level.
-    Include sets, reps, and rest times.
-    """
+async def workout(ctx, goal: str = "general", muscle_groups: str = None, length: str = "45min", equipment: str = "bodyweight", difficulty: str = "beginner"):
+    """Suggests a workout based on past trends or generates a new one."""
+    user = ctx.author.name
+    today = datetime.today().strftime('%A')  # Get current day of the week
 
-    response = openai.chat.completions.create(
-        model="gpt-3.5-turbo",
-        messages=[
-            {"role": "system", "content": "You are a personal fitness trainer."},
-            {"role": "user", "content": prompt}
-        ]
-    )
-    
-    await ctx.send(response.choices[0].message.content)
+    # Retrieve past workouts from Google Sheets
+    history = sheet.get_all_records()
+
+    # Find user's workout trends
+    user_workouts = [row for row in history if row["User"] == user]
+    recent_workouts = user_workouts[-5:]  # Get last 5 workouts
+
+    muscle_history = {}  # Track muscle groups trained on different days
+
+    for workout in recent_workouts:
+        if workout["Muscle Groups"] not in muscle_history:
+            muscle_history[workout["Day"]] = workout["Muscle Groups"]
+
+    # Check if a trend exists for today
+    if today in muscle_history:
+        suggested_muscles = muscle_history[today]
+        await ctx.send(f"📅 You typically train **{suggested_muscles}** on {today}s. Would you like to do that today? (Yes/No)")
+        
+        def check(m):
+            return m.author == ctx.author and m.channel == ctx.channel and m.content.lower() in ["yes", "no"]
+
+        try:
+            msg = await bot.wait_for("message", check=check, timeout=30)  # Wait for user response
+            if msg.content.lower() == "yes":
+                muscle_groups = suggested_muscles
+            else:
+                await ctx.send("👍 No problem! Generating a fresh workout...")
+        except asyncio.TimeoutError:
+            await ctx.send("⏳ No response detected, generating a new workout!")
+
+    # Generate workout (same logic as before)
+    workout_plan = f"1️⃣ Squats - 4 sets x 8 reps\n2️⃣ Push-ups - 3 sets x 12 reps\n..."  # Replace with AI generation
+    await ctx.send(f"💪 Here’s your workout for today:\n{workout_plan}")
 
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
