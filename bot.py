@@ -12,16 +12,20 @@ from datetime import datetime
 # Load environment variables
 load_dotenv()
 
-# Initialize the bot
-bot = commands.Bot(command_prefix="/", intents=discord.Intents.default())
-openai.api_key = os.getenv("OPENAI_API_KEY")  # Ensure this is set in your environment
+# Initialize the bot with required intents
+intents = discord.Intents.default()
+intents.message_content = True  # Ensure this is enabled for command processing
+bot = commands.Bot(command_prefix="/", intents=intents)
+
+# Load OpenAI API key
+client = openai.OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 # Google Sheets setup
 scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
 google_creds = json.loads(os.getenv("GOOGLE_SHEETS_CREDENTIALS"))
 creds = ServiceAccountCredentials.from_json_keyfile_dict(google_creds, scope)
-client = gspread.authorize(creds)
-sheet = client.open("AI Fitness Bot Workouts").sheet1
+client_gspread = gspread.authorize(creds)
+sheet = client_gspread.open("AI Fitness Bot Workouts").sheet1
 
 # Helper function to extract workout details from user input
 def parse_workout_request(user_input):
@@ -79,8 +83,7 @@ async def workout(ctx, *, user_input: str = None):
         await ctx.send(f"I need more details! Can you clarify: {missing_str}?")
         return
     
-    # Generate workout plan using OpenAI (updated API usage)
-    client = openai.OpenAI()
+    # Generate workout plan using OpenAI
     response = client.chat.completions.create(
         model="gpt-3.5-turbo",
         messages=[
