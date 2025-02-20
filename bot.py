@@ -36,27 +36,25 @@ async def test(ctx):
 async def workout(ctx, goal: str = "general", muscle_groups: str = None, length: str = "45min", equipment: str = "bodyweight", difficulty: str = "beginner"):
     """Suggests a workout based on past trends or generates a new one."""
     
-    # Check user's workout history
+    # Initialize the workout history
     muscle_history = {}
+    recent_workouts = []  # Ensure this exists to avoid KeyError
 
+    # Fetch past workout data (Assuming this should be coming from Google Sheets)
     for workout in recent_workouts:
         if "Day" in workout and "Muscle Groups" in workout:
             muscle_history[workout["Day"]] = workout["Muscle Groups"]
 
-    today = datetime.datetime.today().strftime("%A")  # Get current day
+    today = datetime.today().strftime("%A")  # Get current day
 
+    # Suggest muscles based on history
     if today in muscle_history:
         suggested_muscles = muscle_history[today]
-        
-        # ✅ Ensure `await` is inside the async function
         await ctx.send(f"📅 You typically train **{suggested_muscles}** on {today}s. Would you like to do that today? (Yes/No)")
 
+        # Check for user response
         def check(m):
-            return (
-                m.author == ctx.author 
-                and m.channel == ctx.channel 
-                and m.content.lower() in ["yes", "no"]
-            )
+            return m.author == ctx.author and m.channel == ctx.channel and m.content.lower() in ["yes", "no"]
 
         try:
             msg = await bot.wait_for("message", check=check, timeout=30)
@@ -65,10 +63,10 @@ async def workout(ctx, goal: str = "general", muscle_groups: str = None, length:
             else:
                 await ctx.send("👍 No problem! Generating a fresh workout...")
         except asyncio.TimeoutError:
-            await ctx.send("⏳ No response detected, generating a new workout!")
+            await ctx.send("⌛ No response detected, generating a new workout!")
 
-    # Generate workout (same logic as before)
-    workout_plan = f"1️⃣ Squats - 4 sets x 8 reps\n2️⃣ Push-ups - 3 sets x 12 reps\n..."  # Replace with AI generation
+    # Generate a basic workout plan (Replace with AI logic)
+    workout_plan = f"🏋️ Squats – 4 sets × 8 reps\n💪 Push-ups – 3 sets × 12 reps\n..."
     await ctx.send(f"💪 Here’s your workout for today:\n{workout_plan}")
 
 import gspread
