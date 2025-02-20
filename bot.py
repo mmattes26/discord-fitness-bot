@@ -1,143 +1,87 @@
-import openai
-import os
 import discord
 from discord.ext import commands
+import openai
+import os
+import re
 from dotenv import load_dotenv
 
 # Load environment variables
 load_dotenv()
 
-# Get token from .env file
-TOKEN = os.getenv("DISCORD_BOT_TOKEN")
+# Initialize the bot
+bot = commands.Bot(command_prefix="/", intents=discord.Intents.default())
+openai.api_key = os.getenv("OPENAI_API_KEY")  # Ensure this is set in your environment
 
-# Load OpenAI API Key
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-openai.api_key = OPENAI_API_KEY
-
-# Enable required intents
-intents = discord.Intents.default()
-intents.message_content = True  # Required for commands to work
-
-# Create bot instance
-bot = commands.Bot(command_prefix='/', intents=intents)
-
-# Event: Bot successfully connected
-@bot.event
-async def on_ready():
-    print(f'✅ Bot is online! Logged in as {bot.user}')
-
-# Test command to check if bot responds
-@bot.command()
-async def test(ctx):
-    await ctx.send("Bot is working!")
-
-# AI Workout Generator Command
-@bot.command()
-async def workout(ctx, goal: str = "general", muscle_groups: str = None, length: str = "45min", equipment: str = "bodyweight", difficulty: str = "beginner"):
-    """Suggests a workout based on past trends or generates a new one."""
+# Helper function to extract workout details from user input
+def parse_workout_request(user_input):
+    details = {
+        "goal": None,
+        "muscle_groups": None,
+        "length": None,
+        "difficulty": None
+    }
     
-    # Initialize the workout history
-    muscle_history = {}
-    recent_workouts = []  # Ensure this exists to avoid KeyError
+    # Patterns to extract details
+    goal_patterns = {
+        "build muscle": "muscle gain",
+        "lose fat": "fat loss",
+        "increase endurance": "endurance",
+        "strength training": "strength"
+    }
+    for key, value in goal_patterns.items():
+        if key in user_input.lower():
+            details["goal"] = value
+    
+    # Extract muscle groups
+    muscle_match = re.search(r"(?:train|work on|do) ([\w\s]+)", user_input, re.IGNORECASE)
+    if muscle_match:
+        details["muscle_groups"] = muscle_match.group(1).strip()
+    
+    # Extract duration
+    time_match = re.search(r"(\d{2,3})\s?(minutes|min|hours|hrs?)", user_input, re.IGNORECASE)
+    if time_match:
+        details["length"] = f"{time_match.group(1)}min"
+    
+    # Extract difficulty
+    if "beginner" in user_input.lower():
+        details["difficulty"] = "beginner"
+    elif "intermediate" in user_input.lower():
+        details["difficulty"] = "intermediate"
+    elif "advanced" in user_input.lower():
+        details["difficulty"] = "advanced"
+    
+    return details
 
-    # Fetch past workout data (Assuming this should be coming from Google Sheets)
-    for workout in recent_workouts:
-        if "Day" in workout and "Muscle Groups" in workout:
-            muscle_history[workout["Day"]] = workout["Muscle Groups"]
-
-    today = datetime.today().strftime("%A")  # Get current day
-
-    # Suggest muscles based on history
-    if today in muscle_history:
-        suggested_muscles = muscle_history[today]
-        await ctx.send(f"📅 You typically train **{suggested_muscles}** on {today}s. Would you like to do that today? (Yes/No)")
-
-        # Check for user response
-        def check(m):
-            return m.author == ctx.author and m.channel == ctx.channel and m.content.lower() in ["yes", "no"]
-
-        try:
-            msg = await bot.wait_for("message", check=check, timeout=30)
-            if msg.content.lower() == "yes":
-                muscle_groups = suggested_muscles
-            else:
-                await ctx.send("👍 No problem! Generating a fresh workout...")
-        except asyncio.TimeoutError:
-            await ctx.send("⌛ No response detected, generating a new workout!")
-
-    # Generate a basic workout plan (Replace with AI logic)
-    import openai
-
-    client = openai.OpenAI()  # Instantiate the client
-
+@bot.command()
+async def workout(ctx, *, user_input: str = None):
+    """Handles natural language workout requests."""
+    if not user_input:
+        await ctx.send("Tell me what kind of workout you're looking for! Example: 'I want to build muscle, train chest & biceps for 45 minutes, and I'm an advanced lifter.'")
+        return
+    
+    details = parse_workout_request(user_input)
+    
+    # If some details are missing, ask follow-ups
+    missing_details = [key for key, value in details.items() if value is None]
+    if missing_details:
+        missing_str = ", ".join(missing_details)
+        await ctx.send(f"I need more details! Can you clarify: {missing_str}?")
+        return
+    
+    # Generate workout plan using OpenAI (updated API usage)
+    client = openai.OpenAI()
     response = client.chat.completions.create(
-        model="gpt-3.5-turbo",  # Or "gpt-4" if available
+        model="gpt-3.5-turbo",
         messages=[
-            {"role": "system", "content": "You are a fitness coach that generates workouts."},
-            {"role": "user", "content": f"Create a {goal} workout plan focused on {muscle_groups}, lasting {length}, using {equipment}, and at a {difficulty} level."}
+            {"role": "system", "content": "You are a fitness coach that generates detailed workout plans."},
+            {"role": "user", "content": f"Create a {details['goal']} workout focusing on {details['muscle_groups']}, lasting {details['length']}, for a {details['difficulty']} level lifter."}
         ]
     )
-
-    workout_plan = response.choices[0].message.content  # Correct way to access response
-    await ctx.send(f"💪 Here’s your workout for today:\n{workout_plan}")
-
-import gspread
-from oauth2client.service_account import ServiceAccountCredentials
-from datetime import datetime
-
-# Google Sheets setup
-scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-import os
-import json
-
-# Load Google Sheets credentials from the environment variable
-google_creds = json.loads(os.getenv("GOOGLE_SHEETS_CREDENTIALS"))
-creds = ServiceAccountCredentials.from_json_keyfile_dict(google_creds, scope)
-client = gspread.authorize(creds)
-
-# Open the Google Sheet
-SHEET_NAME = "AI Fitness Bot Workouts"
-sheet = client.open(SHEET_NAME).sheet1
-
-@bot.command()
-async def completeworkout(ctx, *, log: str):
-    """Logs completed workouts in Google Sheets."""
-    user = ctx.author.name
-    today = datetime.today().strftime('%Y-%m-%d')
-
-    # Parse the log format (e.g., "Squats ✅, Bench ❌, Rows ✅")
-    exercises = log.split(", ")
-    completed_exercises = []
-    muscle_groups = set()
-
-    for exercise in exercises:
-        parts = exercise.split(" ")
-        status = parts[-1]  # ✅ or ❌
-        exercise_name = " ".join(parts[:-1])
-
-        if status == "✅":
-            completed_exercises.append(exercise_name)
-
-        # Assign muscle groups based on exercise name
-        muscle_group_mapping = {
-            "squat": "Legs & Core",
-            "bench": "Chest & Triceps",
-            "row": "Back & Biceps",
-            "press": "Shoulders",
-            "plank": "Core"
-        }
-        for key, value in muscle_group_mapping.items():
-            if key in exercise_name.lower():
-                muscle_groups.add(value)
-
-    # Convert muscle groups to a string
-    muscle_groups_str = ", ".join(muscle_groups)
-
-    # Log to Google Sheets
-    sheet.append_row([today, user, muscle_groups_str, ", ".join(completed_exercises), "✅"])
-
-    await ctx.send(f"✅ Workout logged! Trained muscle groups: {muscle_groups_str}")
+    
+    workout_plan = response.choices[0].message.content
+    
+    # Send the generated workout
+    await ctx.send(f"Here’s your personalized workout plan:\n{workout_plan}")
 
 # Run bot
-bot.run(TOKEN)
-
+bot.run(os.getenv("DISCORD_BOT_TOKEN"))
