@@ -57,18 +57,23 @@ for workout in recent_workouts:
 if today in muscle_history:
     suggested_muscles = muscle_history[today]
     await ctx.send(f"📅 You typically train **{suggested_muscles}** on {today}s. Would you like to do that today? (Yes/No)")
-        
-        def check(m):
-            return m.author == ctx.author and m.channel == ctx.channel and m.content.lower() in ["yes", "no"]
 
-        try:
-            msg = await bot.wait_for("message", check=check, timeout=30)  # Wait for user response
-            if msg.content.lower() == "yes":
-                muscle_groups = suggested_muscles
-            else:
-                await ctx.send("👍 No problem! Generating a fresh workout...")
-        except asyncio.TimeoutError:
-            await ctx.send("⏳ No response detected, generating a new workout!")
+    # 🛠 Make sure this function is indented correctly
+    def check(m):
+        return (
+            m.author == ctx.author 
+            and m.channel == ctx.channel 
+            and m.content.lower() in ["yes", "no"]
+        )
+
+    try:
+        msg = await bot.wait_for("message", check=check, timeout=30)
+        if msg.content.lower() == "yes":
+            muscle_groups = suggested_muscles
+        else:
+            await ctx.send("👍 No problem! Generating a fresh workout...")
+    except asyncio.TimeoutError:
+        await ctx.send("⏳ No response detected, generating a new workout!")
 
     # Generate workout (same logic as before)
     workout_plan = f"1️⃣ Squats - 4 sets x 8 reps\n2️⃣ Push-ups - 3 sets x 12 reps\n..."  # Replace with AI generation
