@@ -3,7 +3,11 @@ from discord.ext import commands
 import openai
 import os
 import re
+import gspread
+import json
+from oauth2client.service_account import ServiceAccountCredentials
 from dotenv import load_dotenv
+from datetime import datetime
 
 # Load environment variables
 load_dotenv()
@@ -11,6 +15,13 @@ load_dotenv()
 # Initialize the bot
 bot = commands.Bot(command_prefix="/", intents=discord.Intents.default())
 openai.api_key = os.getenv("OPENAI_API_KEY")  # Ensure this is set in your environment
+
+# Google Sheets setup
+scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
+google_creds = json.loads(os.getenv("GOOGLE_SHEETS_CREDENTIALS"))
+creds = ServiceAccountCredentials.from_json_keyfile_dict(google_creds, scope)
+client = gspread.authorize(creds)
+sheet = client.open("AI Fitness Bot Workouts").sheet1
 
 # Helper function to extract workout details from user input
 def parse_workout_request(user_input):
@@ -82,6 +93,40 @@ async def workout(ctx, *, user_input: str = None):
     
     # Send the generated workout
     await ctx.send(f"Here’s your personalized workout plan:\n{workout_plan}")
+
+@bot.command()
+async def completeworkout(ctx, *, log: str):
+    """Logs completed workouts in Google Sheets."""
+    user = ctx.author.name
+    today = datetime.today().strftime('%Y-%m-%d')
+    
+    # Parse exercises from log
+    exercises = log.split(", ")
+    completed_exercises = []
+    muscle_groups = set()
+    
+    muscle_group_mapping = {
+        "squat": "Legs & Core",
+        "bench": "Chest & Triceps",
+        "row": "Back & Biceps",
+        "press": "Shoulders",
+        "plank": "Core"
+    }
+    
+    for exercise in exercises:
+        exercise_name = exercise.strip()
+        completed_exercises.append(exercise_name)
+        
+        for key, value in muscle_group_mapping.items():
+            if key in exercise_name.lower():
+                muscle_groups.add(value)
+    
+    muscle_groups_str = ", ".join(muscle_groups)
+    
+    # Log to Google Sheets
+    sheet.append_row([today, user, muscle_groups_str, ", ".join(completed_exercises), " "])
+    
+    await ctx.send(f"✅ Workout logged! Trained muscle groups: {muscle_groups_str}")
 
 # Run bot
 bot.run(os.getenv("DISCORD_BOT_TOKEN"))
