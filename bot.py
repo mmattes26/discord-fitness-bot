@@ -66,17 +66,17 @@ async def workout(ctx, goal: str = "general", muscle_groups: str = None, length:
             await ctx.send("⌛ No response detected, generating a new workout!")
 
     # Generate a basic workout plan (Replace with AI logic)
-import openai
+    import openai
+    
+    client = openai.OpenAI()  # Create OpenAI client instance
 
-client = openai.OpenAI()  # Create OpenAI client instance
-
-response = client.chat.completions.create(
-    model="gpt-3.5-turbo",
-    messages=[
-        {"role": "system", "content": "You are a fitness coach that generates workouts."},
-        {"role": "user", "content": f"Create a {goal} workout plan focused on {muscle_groups}, lasting {length}, using {equipment}, and at a {difficulty} level."}
-    ]
-)
+    response = client.chat.completions.create(
+        model="gpt-3.5-turbo",
+        messages=[
+            {"role": "system", "content": "You are a fitness coach that generates workouts."},
+            {"role": "user", "content": f"Create a {goal} workout plan focused on {muscle_groups}, lasting {length}, using {equipment}, and at a {difficulty} level."}
+        ]
+    )
     workout_plan = response["choices"][0]["message"]["content"]
     await ctx.send(f"💪 Here’s your workout for today:\n{workout_plan}")
 
