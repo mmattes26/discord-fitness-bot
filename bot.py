@@ -35,45 +35,37 @@ async def test(ctx):
 @bot.command()
 async def workout(ctx, goal: str = "general", muscle_groups: str = None, length: str = "45min", equipment: str = "bodyweight", difficulty: str = "beginner"):
     """Suggests a workout based on past trends or generates a new one."""
-    user = ctx.author.name
-    today = datetime.today().strftime('%A')  # Get current day of the week
+    
+    # Check user's workout history
+    muscle_history = {}
 
-    # Retrieve past workouts from Google Sheets
-    history = sheet.get_all_records()
+    for workout in recent_workouts:
+        if "Day" in workout and "Muscle Groups" in workout:
+            muscle_history[workout["Day"]] = workout["Muscle Groups"]
 
-    # Find user's workout trends
-    user_workouts = [row for row in history if row["User"] == user]
-    recent_workouts = user_workouts[-5:]  # Get last 5 workouts
+    today = datetime.datetime.today().strftime("%A")  # Get current day
 
-    muscle_history = {}  # Track muscle groups trained on different days
+    if today in muscle_history:
+        suggested_muscles = muscle_history[today]
+        
+        # ✅ Ensure `await` is inside the async function
+        await ctx.send(f"📅 You typically train **{suggested_muscles}** on {today}s. Would you like to do that today? (Yes/No)")
 
-# Find user's workout trends
-muscle_history = {}
+        def check(m):
+            return (
+                m.author == ctx.author 
+                and m.channel == ctx.channel 
+                and m.content.lower() in ["yes", "no"]
+            )
 
-for workout in recent_workouts:
-    if "Day" in workout and "Muscle Groups" in workout:
-        muscle_history[workout["Day"]] = workout["Muscle Groups"]
-
-if today in muscle_history:
-    suggested_muscles = muscle_history[today]
-    await ctx.send(f"📅 You typically train **{suggested_muscles}** on {today}s. Would you like to do that today? (Yes/No)")
-
-    # 🛠 Make sure this function is indented correctly
-    def check(m):
-        return (
-            m.author == ctx.author 
-            and m.channel == ctx.channel 
-            and m.content.lower() in ["yes", "no"]
-        )
-
-    try:
-        msg = await bot.wait_for("message", check=check, timeout=30)
-        if msg.content.lower() == "yes":
-            muscle_groups = suggested_muscles
-        else:
-            await ctx.send("👍 No problem! Generating a fresh workout...")
-    except asyncio.TimeoutError:
-        await ctx.send("⏳ No response detected, generating a new workout!")
+        try:
+            msg = await bot.wait_for("message", check=check, timeout=30)
+            if msg.content.lower() == "yes":
+                muscle_groups = suggested_muscles
+            else:
+                await ctx.send("👍 No problem! Generating a fresh workout...")
+        except asyncio.TimeoutError:
+            await ctx.send("⏳ No response detected, generating a new workout!")
 
     # Generate workout (same logic as before)
     workout_plan = f"1️⃣ Squats - 4 sets x 8 reps\n2️⃣ Push-ups - 3 sets x 12 reps\n..."  # Replace with AI generation
