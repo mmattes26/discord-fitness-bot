@@ -27,6 +27,9 @@ creds = ServiceAccountCredentials.from_json_keyfile_dict(google_creds, scope)
 client_gspread = gspread.authorize(creds)
 sheet = client_gspread.open("AI Fitness Bot Workouts").sheet1
 
+# User workout history storage
+user_workout_history = {}
+
 # Helper function to extract workout details from user input
 def parse_workout_request(user_input):
     details = {
@@ -67,69 +70,48 @@ def parse_workout_request(user_input):
     
     return details
 
-@bot.command()
-async def workout(ctx, *, user_input: str = None):
-    """Handles natural language workout requests."""
-    if not user_input:
-        await ctx.send("Tell me what kind of workout you're looking for! Example: 'I want to build muscle, train chest & biceps for 45 minutes, and I'm an advanced lifter.'")
+@bot.event
+async def on_message(message):
+    if message.author == bot.user:
         return
     
-    details = parse_workout_request(user_input)
+    user_input = message.content.lower()
     
-    # If some details are missing, ask follow-ups
-    missing_details = [key for key, value in details.items() if value is None]
-    if missing_details:
-        missing_str = ", ".join(missing_details)
-        await ctx.send(f"I need more details! Can you clarify: {missing_str}?")
-        return
-    
-    # Generate workout plan using OpenAI
-    response = client.chat.completions.create(
-        model="gpt-3.5-turbo",
-        messages=[
-            {"role": "system", "content": "You are a fitness coach that generates detailed workout plans."},
-            {"role": "user", "content": f"Create a {details['goal']} workout focusing on {details['muscle_groups']}, lasting {details['length']}, for a {details['difficulty']} level lifter."}
-        ]
-    )
-    
-    workout_plan = response.choices[0].message.content
-    
-    # Send the generated workout
-    await ctx.send(f"Here’s your personalized workout plan:\n{workout_plan}")
-
-@bot.command()
-async def completeworkout(ctx, *, log: str):
-    """Logs completed workouts in Google Sheets."""
-    user = ctx.author.name
-    today = datetime.today().strftime('%Y-%m-%d')
-    
-    # Parse exercises from log
-    exercises = log.split(", ")
-    completed_exercises = []
-    muscle_groups = set()
-    
-    muscle_group_mapping = {
-        "squat": "Legs & Core",
-        "bench": "Chest & Triceps",
-        "row": "Back & Biceps",
-        "press": "Shoulders",
-        "plank": "Core"
-    }
-    
-    for exercise in exercises:
-        exercise_name = exercise.strip()
-        completed_exercises.append(exercise_name)
+    # Check for workout request in normal conversation
+    if any(keyword in user_input for keyword in ["workout", "exercise", "train"]):
+        details = parse_workout_request(user_input)
         
-        for key, value in muscle_group_mapping.items():
-            if key in exercise_name.lower():
-                muscle_groups.add(value)
+        missing_details = [key for key, value in details.items() if value is None]
+        if missing_details:
+            await message.channel.send(f"I need more details! Can you clarify: {', '.join(missing_details)}?")
+            return
+        
+        response = client.chat.completions.create(
+            model="gpt-3.5-turbo",
+            messages=[
+                {"role": "system", "content": "You are a fitness coach that generates detailed workout plans."},
+                {"role": "user", "content": f"Create a {details['goal']} workout focusing on {details['muscle_groups']}, lasting {details['length']}, for a {details['difficulty']} level lifter."}
+            ]
+        )
+        
+        workout_plan = response.choices[0].message.content
+        user_workout_history[message.author.id] = details  # Store user session
+        
+        await message.channel.send(f"Here’s your personalized workout plan:\n{workout_plan}")
     
-    muscle_groups_str = ", ".join(muscle_groups)
+    # Check for workout completion in normal conversation
+    elif any(keyword in user_input for keyword in ["completed", "finished", "done with my workout"]):
+        if message.author.id in user_workout_history:
+            last_workout = user_workout_history[message.author.id]
+            today = datetime.today().strftime('%Y-%m-%d')
+            user = message.author.name
+            muscle_groups = last_workout['muscle_groups']
+            sheet.append_row([today, user, muscle_groups, "Completed", " "])
+            await message.channel.send(f"✅ Workout logged! Trained muscle groups: {muscle_groups}")
+        else:
+            await message.channel.send("I don’t have a record of your last workout request. Can you tell me what you trained?")
     
-    # Log to Google Sheets
-    sheet.append_row([today, user, muscle_groups_str, ", ".join(completed_exercises), " "])
-    
-    await ctx.send(f"✅ Workout logged! Trained muscle groups: {muscle_groups_str}")
+    await bot.process_commands(message)
 
 # Run bot
 bot.run(os.getenv("DISCORD_BOT_TOKEN"))
