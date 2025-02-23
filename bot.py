@@ -105,9 +105,9 @@ async def on_message(message):
         workout_plan = response.choices[0].message.content
         user_workout_history[user_id] = details  # Store user session
         del user_pending_requests[user_id]  # Clear pending request
-        
-        await message.channel.send(f"Here’s your personalized workout plan:
-{workout_plan}")
+
+        await message.channel.send(f"""Here’s your personalized workout plan:
+{workout_plan}""")
         return
     
     # Check for new workout request
