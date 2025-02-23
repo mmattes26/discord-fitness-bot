@@ -27,17 +27,18 @@ creds = ServiceAccountCredentials.from_json_keyfile_dict(google_creds, scope)
 client_gspread = gspread.authorize(creds)
 sheet = client_gspread.open("AI Fitness Bot Workouts").sheet1
 
-# User workout history storage
+# User workout history and ongoing conversation storage
 user_workout_history = {}
+user_pending_requests = {}
 
 # Helper function to extract workout details from user input
 def parse_workout_request(user_input):
-    details = {
+    details = user_pending_requests.get(user_input, {
         "goal": None,
         "muscle_groups": None,
         "length": None,
         "difficulty": None
-    }
+    })
     
     # Patterns to extract details
     goal_patterns = {
@@ -76,13 +77,46 @@ async def on_message(message):
         return
     
     user_input = message.content.lower()
+    user_id = message.author.id
     
-    # Check for workout request in normal conversation
+    # Check if user has an incomplete request
+    if user_id in user_pending_requests:
+        details = user_pending_requests[user_id]
+        updated_details = parse_workout_request(user_input)
+        
+        for key, value in updated_details.items():
+            if value is not None:
+                details[key] = value
+        
+        missing_details = [key for key, value in details.items() if value is None]
+        if missing_details:
+            await message.channel.send(f"I still need more details! Can you clarify: {', '.join(missing_details)}?")
+            return
+        
+        # Generate workout once all details are filled
+        response = client.chat.completions.create(
+            model="gpt-3.5-turbo",
+            messages=[
+                {"role": "system", "content": "You are a fitness coach that generates detailed workout plans."},
+                {"role": "user", "content": f"Create a {details['goal']} workout focusing on {details['muscle_groups']}, lasting {details['length']}, for a {details['difficulty']} level lifter."}
+            ]
+        )
+        
+        workout_plan = response.choices[0].message.content
+        user_workout_history[user_id] = details  # Store user session
+        del user_pending_requests[user_id]  # Clear pending request
+        
+        await message.channel.send(f"Here’s your personalized workout plan:
+{workout_plan}")
+        return
+    
+    # Check for new workout request
     if any(keyword in user_input for keyword in ["workout", "exercise", "train"]):
         details = parse_workout_request(user_input)
         
         missing_details = [key for key, value in details.items() if value is None]
         if missing_details:
+            user_pending_requests[user_id] = details  # Store for next response
             await message.channel.send(f"I need more details! Can you clarify: {', '.join(missing_details)}?")
             return
         
@@ -95,14 +129,15 @@ async def on_message(message):
         )
         
         workout_plan = response.choices[0].message.content
-        user_workout_history[message.author.id] = details  # Store user session
+        user_workout_history[user_id] = details  # Store user session
         
-        await message.channel.send(f"Here’s your personalized workout plan:\n{workout_plan}")
+        await message.channel.send(f"Here’s your personalized workout plan:
+{workout_plan}")
     
-    # Check for workout completion in normal conversation
+    # Check for workout completion
     elif any(keyword in user_input for keyword in ["completed", "finished", "done with my workout"]):
-        if message.author.id in user_workout_history:
-            last_workout = user_workout_history[message.author.id]
+        if user_id in user_workout_history:
+            last_workout = user_workout_history[user_id]
             today = datetime.today().strftime('%Y-%m-%d')
             user = message.author.name
             muscle_groups = last_workout['muscle_groups']
