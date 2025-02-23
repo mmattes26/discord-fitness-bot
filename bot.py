@@ -32,6 +32,11 @@ user_workout_history = {}
 user_pending_requests = {}
 user_feedback = {}
 
+# List of common muscle groups
+MUSCLE_GROUPS = [
+    "chest", "back", "shoulders", "biceps", "triceps", "legs", "core", "abs", "glutes", "calves"
+]
+
 # Helper function to extract workout details from user input
 def parse_workout_request(user_input, user_id):
     details = user_pending_requests.get(user_id, {
@@ -53,9 +58,9 @@ def parse_workout_request(user_input, user_id):
             details["goal"] = value
     
     # Extract muscle groups
-    muscle_match = re.search(r"(?:train|work on|do|focus on) ([\w\s&]+)", user_input, re.IGNORECASE)
-    if muscle_match:
-        details["muscle_groups"] = muscle_match.group(1).strip()
+    found_muscles = [muscle for muscle in MUSCLE_GROUPS if muscle in user_input.lower()]
+    if found_muscles:
+        details["muscle_groups"] = ", ".join(found_muscles)
     
     # Extract duration
     time_match = re.search(r"(\d{2,3})\s?(minutes|min|hours|hrs?)", user_input, re.IGNORECASE)
