@@ -30,10 +30,11 @@ sheet = client_gspread.open("AI Fitness Bot Workouts").sheet1
 # User workout history and ongoing conversation storage
 user_workout_history = {}
 user_pending_requests = {}
+user_feedback = {}
 
 # Helper function to extract workout details from user input
-def parse_workout_request(user_input):
-    details = user_pending_requests.get(user_input, {
+def parse_workout_request(user_input, user_id):
+    details = user_pending_requests.get(user_id, {
         "goal": None,
         "muscle_groups": None,
         "length": None,
@@ -82,7 +83,7 @@ async def on_message(message):
     # Check if user has an incomplete request
     if user_id in user_pending_requests:
         details = user_pending_requests[user_id]
-        updated_details = parse_workout_request(user_input)
+        updated_details = parse_workout_request(user_input, user_id)
         
         for key, value in updated_details.items():
             if value is not None:
@@ -105,14 +106,13 @@ async def on_message(message):
         workout_plan = response.choices[0].message.content
         user_workout_history[user_id] = details  # Store user session
         del user_pending_requests[user_id]  # Clear pending request
-
-        await message.channel.send(f"""Here’s your personalized workout plan:
-{workout_plan}""")
+        
+        await message.channel.send(f"Here’s your personalized workout plan:\n{workout_plan}")
         return
     
     # Check for new workout request
     if any(keyword in user_input for keyword in ["workout", "exercise", "train"]):
-        details = parse_workout_request(user_input)
+        details = parse_workout_request(user_input, user_id)
         
         missing_details = [key for key, value in details.items() if value is None]
         if missing_details:
@@ -131,8 +131,7 @@ async def on_message(message):
         workout_plan = response.choices[0].message.content
         user_workout_history[user_id] = details  # Store user session
         
-        await message.channel.send(f"Here’s your personalized workout plan:
-{workout_plan}")
+        await message.channel.send(f"Here’s your personalized workout plan:\n{workout_plan}")
     
     # Check for workout completion
     elif any(keyword in user_input for keyword in ["completed", "finished", "done with my workout"]):
