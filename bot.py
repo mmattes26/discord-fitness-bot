@@ -53,7 +53,7 @@ def parse_workout_request(user_input, user_id):
             details["goal"] = value
     
     # Extract muscle groups
-    muscle_match = re.search(r"(?:train|work on|do) ([\w\s]+)", user_input, re.IGNORECASE)
+    muscle_match = re.search(r"(?:train|work on|do|focus on) ([\w\s&]+)", user_input, re.IGNORECASE)
     if muscle_match:
         details["muscle_groups"] = muscle_match.group(1).strip()
     
@@ -111,7 +111,7 @@ async def on_message(message):
         return
     
     # Check for new workout request
-    if any(keyword in user_input for keyword in ["workout", "exercise", "train"]):
+    if any(keyword in user_input for keyword in ["workout", "exercise", "train", "plan"]):
         details = parse_workout_request(user_input, user_id)
         
         missing_details = [key for key, value in details.items() if value is None]
