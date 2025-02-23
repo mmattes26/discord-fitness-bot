@@ -85,6 +85,19 @@ async def on_message(message):
     user_input = message.content.lower()
     user_id = message.author.id
     
+    # Check for workout completion
+    if any(keyword in user_input for keyword in ["completed", "finished", "done with my workout"]):
+        if user_id in user_workout_history:
+            last_workout = user_workout_history[user_id]
+            today = datetime.today().strftime('%Y-%m-%d')
+            user = message.author.name
+            muscle_groups = last_workout['muscle_groups']
+            sheet.append_row([today, user, muscle_groups, "Completed", " "])
+            await message.channel.send(f"✅ Workout logged! Trained muscle groups: {muscle_groups}")
+        else:
+            await message.channel.send("I don’t have a record of your last workout request. Can you tell me what you trained?")
+        return  # Ensure it doesn't process as a new workout request
+    
     # Check if user has an incomplete request
     if user_id in user_pending_requests:
         details = user_pending_requests[user_id]
@@ -126,7 +139,7 @@ async def on_message(message):
             return
         
         response = client.chat.completions.create(
-            model="gpt-3.5-turbo",
+            model="gpt-3.5-turo",
             messages=[
                 {"role": "system", "content": "You are a fitness coach that generates detailed workout plans."},
                 {"role": "user", "content": f"Create a {details['goal']} workout focusing on {details['muscle_groups']}, lasting {details['length']}, for a {details['difficulty']} level lifter."}
@@ -137,18 +150,6 @@ async def on_message(message):
         user_workout_history[user_id] = details  # Store user session
         
         await message.channel.send(f"Here’s your personalized workout plan:\n{workout_plan}")
-    
-    # Check for workout completion
-    elif any(keyword in user_input for keyword in ["completed", "finished", "done with my workout"]):
-        if user_id in user_workout_history:
-            last_workout = user_workout_history[user_id]
-            today = datetime.today().strftime('%Y-%m-%d')
-            user = message.author.name
-            muscle_groups = last_workout['muscle_groups']
-            sheet.append_row([today, user, muscle_groups, "Completed", " "])
-            await message.channel.send(f"✅ Workout logged! Trained muscle groups: {muscle_groups}")
-        else:
-            await message.channel.send("I don’t have a record of your last workout request. Can you tell me what you trained?")
     
     await bot.process_commands(message)
 
