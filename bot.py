@@ -41,8 +41,14 @@ MUSCLE_GROUPS = [
 @bot.event
 async def on_ready():
     print(f'✅ Bot is online! Logged in as {bot.user}')
-    bot.tree.copy_global_to(guild=discord.Object(id=os.getenv("DISCORD_GUILD_ID")))
-    await bot.tree.sync(guild=discord.Object(id=os.getenv("DISCORD_GUILD_ID")))
+    
+    guild_id = os.getenv("DISCORD_GUILD_ID")
+    if guild_id:
+        bot.tree.copy_global_to(guild=discord.Object(id=int(guild_id)))  # Ensure it's an integer
+        await bot.tree.sync(guild=discord.Object(id=int(guild_id)))
+        print("✅ Slash commands synced successfully!")
+    else:
+        print("⚠️ WARNING: DISCORD_GUILD_ID is not set. Skipping command sync.")
 
 # Debug command to check if bot is responding
 @bot.command()
