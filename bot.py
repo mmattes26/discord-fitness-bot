@@ -77,6 +77,21 @@ def parse_workout_request(user_input, user_id):
     
     return details
 
+# Function to analyze past workouts and suggest muscle groups
+def suggest_muscle_groups(user):
+    records = sheet.get_all_records()
+    muscle_counts = {}
+    for record in records:
+        if record["User"] == user:
+            muscle_groups = record["Muscle Groups"].split(", ")
+            for muscle in muscle_groups:
+                muscle_counts[muscle] = muscle_counts.get(muscle, 0) + 1
+    
+    if muscle_counts:
+        sorted_muscles = sorted(muscle_counts, key=muscle_counts.get, reverse=True)
+        return ", ".join(sorted_muscles[:2])  # Suggest top 2 trained muscle groups
+    return None
+
 @bot.event
 async def on_message(message):
     if message.author == bot.user:
@@ -119,6 +134,11 @@ async def on_message(message):
             return
         
         # Generate workout once all details are filled
+        suggested_muscles = suggest_muscle_groups(message.author.name)
+        if suggested_muscles:
+            details['muscle_groups'] = suggested_muscles
+            await message.channel.send(f"💡 Based on past workouts, I suggest training {suggested_muscles} today!")
+        
         response = client.chat.completions.create(
             model="gpt-3.5-turbo",
             messages=[
