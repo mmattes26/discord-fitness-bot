@@ -64,6 +64,7 @@ def parse_workout_request(user_input, user_id):
     
     # Extract duration
     time_match = re.search(r"(\d{2,3})\s?(minutes|min|hours|hrs?)", user_input, re.IGNORECASE)
+    print(f"DEBUG: time_match = {time_match}")  # Add this line
     if time_match:
         details["length"] = f"{time_match.group(1)}min"
     
@@ -123,22 +124,25 @@ async def on_message(message):
     if user_id in user_pending_requests:
         details = user_pending_requests[user_id]
         updated_details = parse_workout_request(user_input, user_id)
-        
+    
         for key, value in updated_details.items():
             if value is not None:
                 details[key] = value
-        
+    
         missing_details = [key for key, value in details.items() if value is None]
         if missing_details:
             await message.channel.send(f"I still need more details! Can you clarify: {', '.join(missing_details)}?")
             return
-        
+    
+        # Store workout request in history BEFORE generating response
+        user_workout_history[user_id] = details
+
         # Generate workout once all details are filled
         suggested_muscles = suggest_muscle_groups(message.author.name)
         if suggested_muscles:
             details['muscle_groups'] = suggested_muscles
             await message.channel.send(f"💡 Based on past workouts, I suggest training {suggested_muscles} today!")
-        
+
         response = client.chat.completions.create(
             model="gpt-3.5-turbo",
             messages=[
@@ -146,11 +150,10 @@ async def on_message(message):
                 {"role": "user", "content": f"Create a {details['goal']} workout focusing on {details['muscle_groups']}, lasting {details['length']}, for a {details['difficulty']} level lifter."}
             ]
         )
-        
+
         workout_plan = response.choices[0].message.content
-        user_workout_history[user_id] = details  # Store user session
         del user_pending_requests[user_id]  # Clear pending request
-        
+    
         await message.channel.send(f"Here’s your personalized workout plan:\n{workout_plan}")
         return
     
