@@ -40,13 +40,18 @@ MUSCLE_GROUPS = [
 # Event: Bot successfully connected
 @bot.event
 async def on_ready():
-    print(f'✅ Bot is online! Logged in as {bot.user}')
-    
-    guild_id = os.getenv("DISCORD_GUILD_ID")
-    if guild_id:
-        bot.tree.copy_global_to(guild=discord.Object(id=int(guild_id)))  # Ensure it's an integer
-        await bot.tree.sync(guild=discord.Object(id=int(guild_id)))
-        print("✅ Slash commands synced successfully!")
+    print(f"✅ Bot is online! Logged in as {bot.user}")
+
+    GUILD_ID = os.getenv("DISCORD_GUILD_ID")
+    if GUILD_ID:
+        try:
+            guild = discord.Object(id=int(GUILD_ID))
+            bot.tree.clear_commands(guild=guild)  # Clears old commands
+            bot.tree.copy_global_to(guild=guild)
+            await bot.tree.sync(guild=guild)
+            print("✅ Slash commands synced successfully!")
+        except Exception as e:
+            print(f"❌ Error syncing commands: {e}")
     else:
         print("⚠️ WARNING: DISCORD_GUILD_ID is not set. Skipping command sync.")
 
@@ -115,9 +120,14 @@ def suggest_muscle_groups(user):
 async def on_message(message):
     if message.author == bot.user:
         return
-    
+
     user_input = message.content.lower()
-    user_id = message.author.id
+    
+    if "i need a workout" in user_input or "give me a workout" in user_input:
+        await message.channel.send("I got you! What are your fitness goal, muscle groups, and workout duration?")
+        return
+
+    await bot.process_commands(message)  # Ensures slash commands still work
     
     # Check for workout completion
     if any(keyword in user_input for keyword in ["completed", "finished", "done with my workout"]):
