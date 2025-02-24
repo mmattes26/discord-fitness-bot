@@ -92,7 +92,13 @@ async def on_message(message):
             today = datetime.today().strftime('%Y-%m-%d')
             user = message.author.name
             muscle_groups = last_workout['muscle_groups']
-            sheet.append_row([today, user, muscle_groups, "Completed", " "])
+            
+            # Check if user skipped any exercises
+            skipped_exercises = re.findall(r"skipped (.+?) because (.+)" , user_input)
+            skipped_exercises_str = ", ".join([exercise for exercise, reason in skipped_exercises])
+            reasons_str = ", ".join([reason for exercise, reason in skipped_exercises])
+            
+            sheet.append_row([today, user, muscle_groups, "Completed", skipped_exercises_str, reasons_str])
             await message.channel.send(f"✅ Workout logged! Trained muscle groups: {muscle_groups}")
         else:
             await message.channel.send("I don’t have a record of your last workout request. Can you tell me what you trained?")
@@ -127,29 +133,6 @@ async def on_message(message):
         
         await message.channel.send(f"Here’s your personalized workout plan:\n{workout_plan}")
         return
-    
-    # Check for new workout request
-    if any(keyword in user_input for keyword in ["workout", "exercise", "train", "plan"]):
-        details = parse_workout_request(user_input, user_id)
-        
-        missing_details = [key for key, value in details.items() if value is None]
-        if missing_details:
-            user_pending_requests[user_id] = details  # Store for next response
-            await message.channel.send(f"I need more details! Can you clarify: {', '.join(missing_details)}?")
-            return
-        
-        response = client.chat.completions.create(
-            model="gpt-3.5-turo",
-            messages=[
-                {"role": "system", "content": "You are a fitness coach that generates detailed workout plans."},
-                {"role": "user", "content": f"Create a {details['goal']} workout focusing on {details['muscle_groups']}, lasting {details['length']}, for a {details['difficulty']} level lifter."}
-            ]
-        )
-        
-        workout_plan = response.choices[0].message.content
-        user_workout_history[user_id] = details  # Store user session
-        
-        await message.channel.send(f"Here’s your personalized workout plan:\n{workout_plan}")
     
     await bot.process_commands(message)
 
