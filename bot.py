@@ -37,29 +37,6 @@ MUSCLE_GROUPS = [
     "chest", "back", "shoulders", "biceps", "triceps", "legs", "core", "abs", "glutes", "calves"
 ]
 
-# Event: Bot successfully connected
-@bot.event
-async def on_ready():
-    print(f"✅ Bot is online! Logged in as {bot.user}")
-
-    GUILD_ID = os.getenv("DISCORD_GUILD_ID")
-    if GUILD_ID:
-        try:
-            guild = discord.Object(id=int(GUILD_ID))
-            bot.tree.clear_commands(guild=guild)  # Clears old commands
-            bot.tree.copy_global_to(guild=guild)
-            await bot.tree.sync(guild=guild)
-            print("✅ Slash commands synced successfully!")
-        except Exception as e:
-            print(f"❌ Error syncing commands: {e}")
-    else:
-        print("⚠️ WARNING: DISCORD_GUILD_ID is not set. Skipping command sync.")
-
-# Debug command to check if bot is responding
-@bot.command()
-async def test(ctx):
-    await ctx.send("✅ Bot is working!")
-
 # Helper function to extract workout details from user input
 def parse_workout_request(user_input, user_id):
     details = user_pending_requests.get(user_id, {
@@ -115,19 +92,21 @@ def suggest_muscle_groups(user):
         return ", ".join(sorted_muscles[:2])  # Suggest top 2 trained muscle groups
     return None
 
-# Event: Process user messages and workout requests
+@bot.event
+async def on_ready():
+    print(f'✅ Bot is online! Logged in as {bot.user}')
+
+@bot.command()
+async def test(ctx):
+    await ctx.send("✅ Bot is working!")
+
 @bot.event
 async def on_message(message):
     if message.author == bot.user:
         return
-
-    user_input = message.content.lower()
     
-    if "i need a workout" in user_input or "give me a workout" in user_input:
-        await message.channel.send("I got you! What are your fitness goal, muscle groups, and workout duration?")
-        return
-
-    await bot.process_commands(message)  # Ensures slash commands still work
+    user_input = message.content.lower()
+    user_id = message.author.id
     
     # Check for workout completion
     if any(keyword in user_input for keyword in ["completed", "finished", "done with my workout"]):
@@ -146,28 +125,18 @@ async def on_message(message):
             await message.channel.send(f"✅ Workout logged! Trained muscle groups: {muscle_groups}")
         else:
             await message.channel.send("I don’t have a record of your last workout request. Can you tell me what you trained?")
-        return  # Ensure it doesn't process as a new workout request
+        return  
     
-    # Check if user has an incomplete request
-    if user_id in user_pending_requests:
-        details = user_pending_requests[user_id]
-        updated_details = parse_workout_request(user_input, user_id)
-        
-        for key, value in updated_details.items():
-            if value is not None:
-                details[key] = value
-        
+    # Process workout request
+    if "workout" in user_input:
+        details = parse_workout_request(user_input, user_id)
+        user_pending_requests[user_id] = details
         missing_details = [key for key, value in details.items() if value is None]
         if missing_details:
-            await message.channel.send(f"I still need more details! Can you clarify: {', '.join(missing_details)}?")
+            await message.channel.send(f"I need more details! Can you clarify: {', '.join(missing_details)}?")
             return
         
-        # Generate workout once all details are filled
-        suggested_muscles = suggest_muscle_groups(message.author.name)
-        if suggested_muscles:
-            details['muscle_groups'] = suggested_muscles
-            await message.channel.send(f"💡 Based on past workouts, I suggest training {suggested_muscles} today!")
-        
+        # Generate workout
         response = client.chat.completions.create(
             model="gpt-3.5-turbo",
             messages=[
@@ -175,16 +144,11 @@ async def on_message(message):
                 {"role": "user", "content": f"Create a {details['goal']} workout focusing on {details['muscle_groups']}, lasting {details['length']}, for a {details['difficulty']} level lifter."}
             ]
         )
-        
         workout_plan = response.choices[0].message.content
         user_workout_history[user_id] = details  # Store user session
-        del user_pending_requests[user_id]  # Clear pending request
-        
         await message.channel.send(f"Here’s your personalized workout plan:\n{workout_plan}")
-        return
     
-    await bot.process_commands(message)  # Ensure other commands work
+    await bot.process_commands(message)
 
 # Run bot
 bot.run(os.getenv("DISCORD_BOT_TOKEN"))
-
