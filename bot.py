@@ -75,6 +75,7 @@ def parse_workout_request(user_input, user_id):
     elif "advanced" in user_input.lower():
         details["difficulty"] = "advanced"
     
+    user_pending_requests[user_id] = details  # Store updated details
     return details
 
 # Function to analyze past workouts and suggest muscle groups
@@ -130,8 +131,8 @@ async def on_message(message):
     # Process workout request
     if "workout" in user_input:
         details = parse_workout_request(user_input, user_id)
-        user_pending_requests[user_id] = details
         missing_details = [key for key, value in details.items() if value is None]
+        
         if missing_details:
             await message.channel.send(f"I need more details! Can you clarify: {', '.join(missing_details)}?")
             return
